@@ -15,6 +15,13 @@ def load_data():
 
     df = df[[c for c in df.columns if not c.endswith('_drop')]]
 
+    df.to_csv(
+        "merged_dataset.csv",
+        index=False
+    )
+
+    print(df.head())
+
     if 'quantity_y' in df.columns:
         df['quantity'] = df['quantity_y']
     elif 'quantity_x' in df.columns:

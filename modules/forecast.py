@@ -4,18 +4,25 @@ import plotly.graph_objects as go
 import plotly.express as px
 
 from prophet import Prophet
-from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.linear_model import LinearRegression
 
 
-# ================= 1. FORECAST GRAPH =================
+# =========================================================
+# FORECAST GRAPH
+# =========================================================
 def forecast_graph(data, forecast):
 
-    # smooth line
-    forecast['smooth'] = forecast['yhat'].rolling(7).mean()
+    forecast['smooth'] = (
+        forecast['yhat']
+        .rolling(7)
+        .mean()
+    )
 
     fig = go.Figure()
 
-    # Actual
+    # =====================================================
+    # ACTUAL
+    # =====================================================
     fig.add_trace(go.Scatter(
         x=data['ds'],
         y=data['y'],
@@ -23,7 +30,9 @@ def forecast_graph(data, forecast):
         line=dict(width=2)
     ))
 
-    # Forecast
+    # =====================================================
+    # FORECAST
+    # =====================================================
     fig.add_trace(go.Scatter(
         x=forecast['ds'],
         y=forecast['smooth'],
@@ -31,7 +40,9 @@ def forecast_graph(data, forecast):
         line=dict(width=3)
     ))
 
-    # Upper range
+    # =====================================================
+    # UPPER RANGE
+    # =====================================================
     fig.add_trace(go.Scatter(
         x=forecast['ds'],
         y=forecast['yhat_upper'],
@@ -39,7 +50,9 @@ def forecast_graph(data, forecast):
         showlegend=False
     ))
 
-    # Lower range
+    # =====================================================
+    # LOWER RANGE
+    # =====================================================
     fig.add_trace(go.Scatter(
         x=forecast['ds'],
         y=forecast['yhat_lower'],
@@ -56,14 +69,15 @@ def forecast_graph(data, forecast):
     st.plotly_chart(
         fig,
         use_container_width=True,
-        key="forecast_chart"
+        key="forecast_graph"
     )
 
 
-# ================= 2. GROWTH + CONFIDENCE =================
+# =========================================================
+# GROWTH + CONFIDENCE
+# =========================================================
 def growth_confidence(forecast, days):
 
-    # ---------- Growth ----------
     recent = forecast['yhat'].tail(7).mean()
 
     past = forecast['yhat'].iloc[
@@ -71,22 +85,27 @@ def growth_confidence(forecast, days):
            ].mean()
 
     if pd.isna(past) or past == 0:
+
         growth = 0
 
     else:
-        growth = ((recent - past) / past) * 100
 
-    # ---------- Dynamic Confidence ----------
+        growth = (
+            (recent - past)
+            / past
+        ) * 100
+
     future_data = forecast.tail(days)
 
     avg_pred = future_data['yhat'].mean()
 
     uncertainty = (
-        future_data['yhat_upper'] -
+        future_data['yhat_upper']
+        -
         future_data['yhat_lower']
     ).mean()
 
-    if avg_pred == 0 or pd.isna(avg_pred):
+    if avg_pred == 0:
 
         confidence = 50
 
@@ -100,320 +119,429 @@ def growth_confidence(forecast, days):
 
     confidence = round(confidence, 1)
 
-    # realistic range
-    confidence = max(35, min(95, confidence))
+    confidence = max(
+        35,
+        min(95, confidence)
+    )
 
-    # ---------- Stability ----------
-    first_range = (
-        future_data['yhat_upper'] -
-        future_data['yhat_lower']
-    ).head(5).mean()
+    if confidence >= 75:
 
-    last_range = (
-        future_data['yhat_upper'] -
-        future_data['yhat_lower']
-    ).tail(5).mean()
-
-    diff = abs(last_range - first_range)
-
-    if diff < 5:
         stability = "📉 Stable"
 
-    elif diff < 15:
+    elif confidence >= 50:
+
         stability = "📊 Moderate"
 
     else:
+
         stability = "📈 Uncertain"
 
     return growth, confidence, stability
 
 
-# ================= 3. FUTURE SUMMARY =================
-def future_summary(forecast, days):
-
-    st.subheader("🔮 Future Prediction")
-
-    future_data = forecast.tail(days)
-
-    avg_val = future_data['yhat'].mean()
-    max_val = future_data['yhat_upper'].max()
-    min_val = future_data['yhat_lower'].min()
-
-    col1, col2, col3 = st.columns(3)
-
-    col1.metric(
-        "📊 Avg Future",
-        f"{avg_val:.1f}"
-    )
-
-    col2.metric(
-        "🚀 Best Case",
-        f"{max_val:.1f}"
-    )
-
-    col3.metric(
-        "⚠️ Worst Case",
-        f"{min_val:.1f}"
-    )
-
-
-# ================= 4. SMART STOCK RISK =================
-def stock_risk(df, forecast, days):
-
-    st.subheader("⚠️ Smart Stock Risk")
-
-    future_avg = forecast['yhat'].tail(days).mean()
-
-    prod = df.groupby('product_name')['quantity'] \
-        .sum() \
-        .reset_index()
-
-    avg_sales = prod['quantity'].mean()
-
-    # low stock
-    low_stock = prod[
-        prod['quantity'] < avg_sales
-    ]
-
-    # over stock
-    overstock = prod[
-        prod['quantity'] > (avg_sales * 2)
-    ]
-
-    col1, col2 = st.columns(2)
-
-    # ---------- LOW STOCK ----------
-    with col1:
-
-        st.write("🔴 Stock-Out Risk")
-
-        if len(low_stock) > 0:
-
-            for row in low_stock.head(5).itertuples():
-
-                st.warning(
-                    f"{row.product_name} may run out soon"
-                )
-
-        else:
-            st.success("No stock risk detected")
-
-    # ---------- OVER STOCK ----------
-    with col2:
-
-        st.write("🟡 Overstock Alert")
-
-        if len(overstock) > 0:
-
-            for row in overstock.head(5).itertuples():
-
-                st.info(
-                    f"{row.product_name} has excess stock"
-                )
-
-        else:
-            st.success("No overstock issue")
-
-
-# ================= 5. CUSTOMER PRODUCT ML =================
-def customer_product_prediction(df):
-
-    st.subheader("🛒 Future Customer Product Prediction")
-
-    # user-product matrix
-    user_product = df.pivot_table(
-        index='customer_id',
-        columns='product_name',
-        values='quantity',
-        aggfunc='sum',
-        fill_value=0
-    )
-
-    # similarity matrix
-    similarity = cosine_similarity(user_product)
-
-    similarity_df = pd.DataFrame(
-        similarity,
-        index=user_product.index,
-        columns=user_product.index
-    )
-
-    # customer select
-    selected_customer = st.selectbox(
-        "Select Customer",
-        user_product.index,
-        key="customer_prediction"
-    )
-
-    # similar customers
-    similar_users = similarity_df[selected_customer] \
-        .sort_values(ascending=False)
-
-    similar_users = similar_users.iloc[1:6]
-
-    # already purchased
-    bought_products = set(
-        user_product.loc[selected_customer]
-        [user_product.loc[selected_customer] > 0]
-        .index
-    )
-
-    # recommendations
-    recommended_products = {}
-
-    for sim_user in similar_users.index:
-
-        sim_products = user_product.loc[sim_user]
-
-        for product, qty in sim_products.items():
-
-            if qty > 0 and product not in bought_products:
-
-                if product not in recommended_products:
-
-                    recommended_products[product] = qty
-
-                else:
-
-                    recommended_products[product] += qty
-
-    # no recommendation
-    if len(recommended_products) == 0:
-
-        st.info("No prediction available")
-
-        return
-
-    # dataframe
-    rec_df = pd.DataFrame(
-        recommended_products.items(),
-        columns=['Product', 'Prediction Score']
-    )
-
-    rec_df = rec_df.sort_values(
-        by='Prediction Score',
-        ascending=False
-    ).head(5)
-
-    # layout
-    col1, col2 = st.columns([1, 2])
-
-    # table
-    with col1:
-
-        st.dataframe(
-            rec_df,
-            use_container_width=True
-        )
-
-    # graph
-    with col2:
-
-        fig = px.bar(
-            rec_df,
-            x='Product',
-            y='Prediction Score',
-            title="Future Purchase Prediction"
-        )
-
-        st.plotly_chart(
-            fig,
-            use_container_width=True,
-            key="future_prediction_chart"
-        )
-
-    # insight
-    top_product = rec_df.iloc[0]['Product']
-
-    st.success(
-        f"🎯 Customer {selected_customer} is likely to buy '{top_product}' next"
-    )
-
-
-# ================= MAIN FUNCTION =================
+# =========================================================
+# MAIN FUNCTION
+# =========================================================
 def show_forecast(df):
 
     st.markdown("## 🔮 Forecast Dashboard")
 
-    # ---------- SETTINGS ----------
+    # =====================================================
+    # FORECAST SETTINGS
+    # =====================================================
+    st.subheader("⚙️ Forecast Settings")
+
     col1, col2 = st.columns(2)
 
     with col1:
 
-        days = st.slider(
-            "Forecast Days",
-            7,
-            90,
-            30,
-            key="forecast_days"
+        days_input = st.text_input(
+            "Enter Forecast Days",
+            placeholder="Enter days between 7 - 365",
+            key="forecast_days_input"
         )
+
+        st.caption("""
+        ✅ Minimum: 7 Days
+
+        ✅ Maximum: 365 Days
+        """)
 
     with col2:
 
         metric = st.selectbox(
             "Forecast Metric",
-            ["quantity", "total_price"],
-            key="forecast_metric"
+            [
+                "quantity",
+                "total_price"
+            ],
+            key="forecast_metric_select"
         )
 
-    # ---------- DATA ----------
-    data = df.groupby('order_date')[metric] \
-        .sum() \
-        .reset_index()
-
-    data.columns = ['ds', 'y']
-
-    # ---------- MODEL ----------
-    model = Prophet()
-
-    model.fit(data)
-
-    future = model.make_future_dataframe(
-        periods=days
+    forecast_btn = st.button(
+        "🚀 Confirm Forecast Search",
+        use_container_width=True,
+        key="forecast_confirm_button"
     )
 
-    forecast = model.predict(future)
-
-    # ================= FORECAST GRAPH =================
-    st.subheader("📈 Forecast Graph")
-
-    forecast_graph(data, forecast)
+    # =====================================================
+    # SESSION STATE
+    # =====================================================
+    if forecast_btn:
+        st.session_state["forecast_run"] = True
 
     st.markdown("---")
 
-    # ================= GROWTH =================
-    st.subheader("📊 Growth & Confidence")
+    # =====================================================
+    # FORECAST RESULT
+    # =====================================================
+    if st.session_state.get(
+        "forecast_run",
+        False
+    ):
 
-    growth, confidence, stability = growth_confidence(
-        forecast,
-        days
-    )
+        if days_input == "":
 
-    col1, col2, col3 = st.columns(3)
+            st.warning(
+                "Please enter forecast days"
+            )
 
-    col1.metric(
-        "Growth %",
-        f"{growth:.2f}%"
-    )
+        elif not days_input.isdigit():
 
-    col2.metric(
-        "Confidence %",
-        f"{confidence:.1f}%"
-    )
+            st.error(
+                "Forecast days must be numeric"
+            )
 
-    col3.write(stability)
+        else:
+
+            days = int(days_input)
+
+            if days < 7 or days > 365:
+
+                st.error(
+                    "Forecast days must be between 7 and 365"
+                )
+
+            else:
+
+                # =============================================
+                # DATA
+                # =============================================
+                data = df.groupby(
+                    'order_date'
+                )[metric].sum().reset_index()
+
+                data.columns = [
+                    'ds',
+                    'y'
+                ]
+
+                # =============================================
+                # MODEL
+                # =============================================
+                model = Prophet()
+
+                model.fit(data)
+
+                future = model.make_future_dataframe(
+                    periods=days
+                )
+
+                forecast = model.predict(future)
+
+                # =============================================
+                # GRAPH
+                # =============================================
+                st.subheader("📈 Forecast Graph")
+
+                forecast_graph(
+                    data,
+                    forecast
+                )
+
+                st.markdown("---")
+
+                # =============================================
+                # GROWTH
+                # =============================================
+                growth, confidence, stability = (
+                    growth_confidence(
+                        forecast,
+                        days
+                    )
+                )
+
+                g1, g2, g3 = st.columns(3)
+
+                g1.metric(
+                    "Growth %",
+                    f"{growth:.2f}%"
+                )
+
+                g2.metric(
+                    "Confidence %",
+                    f"{confidence:.1f}%"
+                )
+
+                g3.metric(
+                    "Stability",
+                    stability
+                )
+
+                st.markdown("---")
+
+                # =============================================
+                # FUTURE SUMMARY
+                # =============================================
+                future_data = forecast.tail(days)
+
+                f1, f2, f3 = st.columns(3)
+
+                f1.metric(
+                    "📊 Avg Future",
+                    f"{future_data['yhat'].mean():.1f}"
+                )
+
+                f2.metric(
+                    "🚀 Best Case",
+                    f"{future_data['yhat_upper'].max():.1f}"
+                )
+
+                f3.metric(
+                    "⚠️ Worst Case",
+                    f"{future_data['yhat_lower'].min():.1f}"
+                )
+
+                st.markdown("---")
+
+                # =============================================
+                # FINAL FORECAST INSIGHT
+                # =============================================
+                st.subheader("🧠 Forecast Insight")
+
+                if growth > 15:
+
+                    st.success("""
+                    🚀 Strong future growth expected.
+
+                    Recommended Actions:
+                    • Increase inventory
+                    • Prepare warehouse
+                    • Increase marketing budget
+                    """)
+
+                elif growth > 0:
+
+                    st.info("""
+                    📈 Stable future growth detected.
+
+                    Recommended Actions:
+                    • Maintain stock balance
+                    • Monitor customer demand
+                    """)
+
+                else:
+
+                    st.warning("""
+                    ⚠️ Slow growth predicted.
+
+                    Recommended Actions:
+                    • Run discount campaigns
+                    • Reduce excess inventory
+                    • Improve promotions
+                    """)
 
     st.markdown("---")
 
-    # ================= FUTURE =================
-    future_summary(forecast, days)
+    # =====================================================
+    # REVENUE STRATEGY
+    # =====================================================
+    st.subheader("💰 Revenue Strategy")
+
+    r1, r2 = st.columns([3, 1])
+
+    with r1:
+
+        revenue_days_input = st.text_input(
+            "Enter Revenue Forecast Days",
+            placeholder="Enter days between 7 - 365",
+            key="forecast_revenue_days_input"
+        )
+
+        st.caption("""
+        ✅ Minimum: 7 Days
+
+        ✅ Maximum: 365 Days
+        """)
+
+    with r2:
+
+        st.write("")
+        st.write("")
+
+        revenue_btn = st.button(
+            "🚀 Confirm Revenue Forecast",
+            use_container_width=True,
+            key="forecast_revenue_btn"
+        )
+
+    # =====================================================
+    # SESSION STATE
+    # =====================================================
+    if revenue_btn:
+        st.session_state["revenue_run"] = True
 
     st.markdown("---")
 
-    # ================= STOCK =================
-    stock_risk(df, forecast, days)
+    # =====================================================
+    # REVENUE RESULT
+    # =====================================================
+    if st.session_state.get(
+        "revenue_run",
+        False
+    ):
 
-    st.markdown("---")
+        if revenue_days_input == "":
 
-    # ================= CUSTOMER PRODUCT AI =================
-    customer_product_prediction(df)
+            st.warning(
+                "Please enter forecast days"
+            )
+
+        elif not revenue_days_input.isdigit():
+
+            st.error(
+                "Forecast days must be numeric"
+            )
+
+        else:
+
+            revenue_days = int(
+                revenue_days_input
+            )
+
+            if revenue_days < 7 or revenue_days > 365:
+
+                st.error(
+                    "Forecast days must be between 7 and 365"
+                )
+
+            else:
+
+                revenue_df = df.groupby(
+                    'order_date'
+                ).agg({
+                    'total_price': 'sum'
+                }).reset_index()
+
+                revenue_df['day'] = range(
+                    len(revenue_df)
+                )
+
+                X = revenue_df[['day']]
+                y = revenue_df['total_price']
+
+                revenue_model = LinearRegression()
+
+                revenue_model.fit(X, y)
+
+                future_revenue = revenue_model.predict(
+                    [[
+                        len(revenue_df)
+                        + revenue_days
+                    ]]
+                )[0]
+
+                current_avg = revenue_df[
+                    'total_price'
+                ].mean()
+
+                revenue_growth = (
+                    (
+                        future_revenue
+                        -
+                        current_avg
+                    )
+                    /
+                    current_avg
+                ) * 100
+
+                # =============================================
+                # METRICS
+                # =============================================
+                rev1, rev2 = st.columns(2)
+
+                rev1.metric(
+                    "Predicted Revenue",
+                    f"{future_revenue:.0f}"
+                )
+
+                rev2.metric(
+                    "Growth Forecast",
+                    f"{revenue_growth:.2f}%"
+                )
+
+                st.markdown("---")
+
+                # =============================================
+                # AI
+                # =============================================
+                if revenue_growth > 15:
+
+                    st.success("""
+                    🚀 Strong Growth Expected
+
+                    Strategy:
+                    • Increase inventory
+                    • Increase marketing budget
+                    • Focus on best-selling products
+                    """)
+
+                elif revenue_growth > 0:
+
+                    st.info("""
+                    📈 Stable Revenue Trend
+
+                    Strategy:
+                    • Maintain operations
+                    • Improve customer retention
+                    """)
+
+                else:
+
+                    st.warning("""
+                    📉 Revenue Risk Detected
+
+                    Strategy:
+                    • Reduce weak inventory
+                    • Run discount campaigns
+                    • Optimize spending
+                    """)
+
+                st.markdown("---")
+
+                # =============================================
+                # GRAPH
+                # =============================================
+                graph_data = pd.DataFrame({
+                    'Type': [
+                        'Current Revenue',
+                        'Future Revenue'
+                    ],
+                    'Revenue': [
+                        current_avg,
+                        future_revenue
+                    ]
+                })
+
+                fig2 = px.bar(
+                    graph_data,
+                    x='Type',
+                    y='Revenue',
+                    title="Revenue Forecast"
+                )
+
+                st.plotly_chart(
+                    fig2,
+                    use_container_width=True,
+                    key=f"forecast_revenue_graph_{revenue_days}"
+                )

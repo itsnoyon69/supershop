@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import plotly.express as px
-from sklearn.linear_model import LinearRegression
 
 
 # =========================================================
@@ -34,17 +32,20 @@ def show_strategy(df):
     # PRODUCT SCORE
     # =====================================================
     product_df['sales_score'] = (
-        product_df['sales'] /
+        product_df['sales']
+        /
         product_df['sales'].max()
     ) * 100
 
     product_df['revenue_score'] = (
-        product_df['revenue'] /
+        product_df['revenue']
+        /
         product_df['revenue'].max()
     ) * 100
 
     product_df['customer_score'] = (
-        product_df['customers'] /
+        product_df['customers']
+        /
         product_df['customers'].max()
     ) * 100
 
@@ -83,23 +84,24 @@ def show_strategy(df):
     ).iloc[0]
 
     weak_products = product_df[
-        product_df['status'] ==
+        product_df['status']
+        ==
         "⚠️ Risk Product"
     ]
 
-    col1, col2, col3 = st.columns(3)
+    o1, o2, o3 = st.columns(3)
 
-    col1.metric(
+    o1.metric(
         "🔥 Best Product",
         top_product['product_name']
     )
 
-    col2.metric(
+    o2.metric(
         "📈 Top Score",
         f"{top_product['strategy_score']:.1f}"
     )
 
-    col3.metric(
+    o3.metric(
         "⚠️ Risk Products",
         len(weak_products)
     )
@@ -111,108 +113,153 @@ def show_strategy(df):
     # =====================================================
     st.subheader("📦 Product Strategy")
 
-    selected_product = st.selectbox(
-        "Select Product",
-        product_df['product_name'].unique(),
-        key="strategy_product"
+    product_options = sorted(
+        product_df['product_name']
+        .dropna()
+        .unique()
     )
 
-    row = product_df[
-        product_df['product_name'] ==
-        selected_product
-    ].iloc[0]
+    p1, p2 = st.columns([3, 1])
+
+    with p1:
+
+        selected_product = st.selectbox(
+            "Select Product",
+            ["Select Product"] + list(product_options),
+            index=0,
+            key="strategy_product_select"
+        )
+
+    with p2:
+
+        st.write("")
+        st.write("")
+
+        product_btn = st.button(
+            "🔍 Confirm Product Search",
+            use_container_width=True,
+            key="strategy_product_btn"
+        )
 
     # =====================================================
-    # PRODUCT METRICS
+    # SESSION STATE FIX
     # =====================================================
-    col1, col2, col3 = st.columns(3)
-
-    col1.metric(
-        "Sales",
-        int(row['sales'])
-    )
-
-    col2.metric(
-        "Revenue",
-        f"{row['revenue']:.0f}"
-    )
-
-    col3.metric(
-        "Strategy",
-        row['status']
-    )
+    if product_btn:
+        st.session_state["strategy_product_run"] = True
 
     st.markdown("---")
 
     # =====================================================
-    # AI STRATEGY
+    # PRODUCT RESULT
     # =====================================================
-    if row['strategy_score'] >= 75:
+    if st.session_state.get(
+        "strategy_product_run",
+        False
+    ):
 
-        st.success(f"""
-        🔥 {selected_product} has strong growth potential.
+        if selected_product == "Select Product":
 
-        Recommended Strategy:
-        • Increase stock
-        • Push marketing campaigns
-        • Highlight in homepage
-        • Create combo offers
-        """)
+            st.warning(
+                "Please select a product"
+            )
 
-    elif row['strategy_score'] >= 45:
+        else:
 
-        st.info(f"""
-        📈 {selected_product} is stable.
+            row = product_df[
+                product_df['product_name']
+                ==
+                selected_product
+            ].iloc[0]
 
-        Recommended Strategy:
-        • Monitor performance
-        • Improve promotions
-        • Test bundle strategy
-        """)
+            # =================================================
+            # PRODUCT METRICS
+            # =================================================
+            c1, c2, c3 = st.columns(3)
 
-    else:
+            c1.metric(
+                "Sales",
+                int(row['sales'])
+            )
 
-        st.warning(f"""
-        ⚠️ {selected_product} is risky.
+            c2.metric(
+                "Revenue",
+                f"{row['revenue']:.0f}"
+            )
 
-        Recommended Strategy:
-        • Apply discounts
-        • Reduce inventory
-        • Bundle with top products
-        """)
+            c3.metric(
+                "Strategy",
+                row['status']
+            )
 
-    st.markdown("---")
+            st.markdown("---")
 
-    # =====================================================
-    # PRODUCT SCORE GRAPH
-    # =====================================================
-    st.subheader("📈 Product Analysis")
+            # =================================================
+            # AI STRATEGY
+            # =================================================
+            if row['strategy_score'] >= 75:
 
-    graph_df = pd.DataFrame({
-        'Metric': [
-            'Sales',
-            'Revenue',
-            'Customers'
-        ],
-        'Score': [
-            row['sales_score'],
-            row['revenue_score'],
-            row['customer_score']
-        ]
-    })
+                st.success(f"""
+                🔥 {selected_product} has strong growth potential.
 
-    fig = px.bar(
-        graph_df,
-        x='Metric',
-        y='Score',
-        title="Product Strategy Analysis"
-    )
+                Recommended Strategy:
+                • Increase stock
+                • Push marketing campaigns
+                • Highlight in homepage
+                • Create combo offers
+                """)
 
-    st.plotly_chart(
-        fig,
-        use_container_width=True,
-        key="strategy_graph"
-    )
+            elif row['strategy_score'] >= 45:
+
+                st.info(f"""
+                📈 {selected_product} is stable.
+
+                Recommended Strategy:
+                • Monitor performance
+                • Improve promotions
+                • Test bundle strategy
+                """)
+
+            else:
+
+                st.warning(f"""
+                ⚠️ {selected_product} is risky.
+
+                Recommended Strategy:
+                • Apply discounts
+                • Reduce inventory
+                • Bundle with top products
+                """)
+
+            st.markdown("---")
+
+            # =================================================
+            # GRAPH
+            # =================================================
+            graph_df = pd.DataFrame({
+                'Metric': [
+                    'Sales',
+                    'Revenue',
+                    'Customers'
+                ],
+                'Score': [
+                    row['sales_score'],
+                    row['revenue_score'],
+                    row['customer_score']
+                ]
+            })
+
+            fig = px.bar(
+                graph_df,
+                x='Metric',
+                y='Score',
+                title="Product Strategy Analysis"
+            )
+
+            st.plotly_chart(
+                fig,
+                use_container_width=True,
+                key=f"strategy_graph_{selected_product}"
+            )
 
     st.markdown("---")
 
@@ -236,233 +283,179 @@ def show_strategy(df):
         'last_order'
     ]
 
-    # inactivity
+    # =====================================================
+    # INACTIVE DAYS
+    # =====================================================
     today = df['order_date'].max()
 
     customer_df['inactive_days'] = (
-        today - customer_df['last_order']
+        today -
+        customer_df['last_order']
     ).dt.days
 
-    # score
+    # =====================================================
+    # SCORE
+    # =====================================================
     customer_df['customer_score'] = (
         (
-            customer_df['orders'] /
+            customer_df['orders']
+            /
             customer_df['orders'].max()
         ) * 30
         +
         (
-            customer_df['spending'] /
+            customer_df['spending']
+            /
             customer_df['spending'].max()
         ) * 50
         +
         (
             1 -
             (
-                customer_df['inactive_days'] /
+                customer_df['inactive_days']
+                /
                 customer_df['inactive_days'].max()
             )
         ) * 20
     )
 
     # =====================================================
-    # SELECT CUSTOMER
+    # SEARCH
     # =====================================================
-    selected_customer = st.selectbox(
-        "Select Customer",
-        customer_df['customer_id'].unique(),
-        key="strategy_customer"
-    )
+    s1, s2 = st.columns([3, 1])
 
-    cust = customer_df[
-        customer_df['customer_id'] ==
-        selected_customer
-    ].iloc[0]
+    with s1:
 
-    # =====================================================
-    # CUSTOMER TYPE
-    # =====================================================
-    if cust['customer_score'] >= 75:
+        customer_input = st.text_input(
+            "Search Customer ID",
+            placeholder="Enter Customer ID",
+            key="strategy_customer_search"
+        )
 
-        customer_status = "💎 High Value"
+    with s2:
 
-        recommendation = """
-        • Send loyalty rewards
-        • Offer premium products
-        • Give early access offers
-        """
+        st.write("")
+        st.write("")
 
-    elif cust['customer_score'] >= 45:
-
-        customer_status = "📈 Moderate"
-
-        recommendation = """
-        • Personalized offers
-        • Product recommendations
-        • Engagement campaigns
-        """
-
-    else:
-
-        customer_status = "⚠️ At Risk"
-
-        recommendation = """
-        • Reactivation discount
-        • Retarget campaigns
-        • Follow-up promotions
-        """
+        customer_btn = st.button(
+            "🔍 Confirm Customer Search",
+            use_container_width=True,
+            key="strategy_customer_btn"
+        )
 
     # =====================================================
-    # CUSTOMER METRICS
+    # SESSION STATE FIX
     # =====================================================
-    col1, col2, col3 = st.columns(3)
-
-    col1.metric(
-        "Customer Score",
-        f"{cust['customer_score']:.1f}"
-    )
-
-    col2.metric(
-        "Total Spending",
-        f"{cust['spending']:.0f}"
-    )
-
-    col3.metric(
-        "Status",
-        customer_status
-    )
+    if customer_btn:
+        st.session_state["strategy_customer_run"] = True
 
     st.markdown("---")
 
     # =====================================================
-    # CUSTOMER STRATEGY AI
+    # CUSTOMER RESULT
     # =====================================================
-    st.success(f"""
-    👤 Customer:
-    {selected_customer}
+    if st.session_state.get(
+        "strategy_customer_run",
+        False
+    ):
 
-    Recommended Strategy:
-    {recommendation}
-    """)
+        if customer_input == "":
 
-    st.markdown("---")
+            st.warning(
+                "Please enter customer ID"
+            )
 
-    # =====================================================
-    # REVENUE STRATEGY
-    # =====================================================
-    st.subheader("💰 Revenue Strategy")
+        elif not customer_input.isdigit():
 
-    revenue_df = df.groupby('order_date').agg({
-        'total_price': 'sum'
-    }).reset_index()
+            st.error(
+                "Customer ID must be numeric"
+            )
 
-    revenue_df['day'] = range(len(revenue_df))
+        else:
 
-    X = revenue_df[['day']]
-    y = revenue_df['total_price']
+            customer_id = int(customer_input)
 
-    model = LinearRegression()
+            customer_exists = customer_df[
+                customer_df['customer_id']
+                ==
+                customer_id
+            ]
 
-    model.fit(X, y)
+            if len(customer_exists) == 0:
 
-    future_days = st.slider(
-        "Forecast Days",
-        7,
-        180,
-        30,
-        key="strategy_forecast_days"
-    )
+                st.error(
+                    "Customer not found"
+                )
 
-    future_revenue = model.predict(
-        [[len(revenue_df) + future_days]]
-    )[0]
+            else:
 
-    current_avg = revenue_df[
-        'total_price'
-    ].mean()
+                cust = customer_exists.iloc[0]
 
-    growth = (
-        (future_revenue - current_avg)
-        / current_avg
-    ) * 100
+                # =============================================
+                # CUSTOMER TYPE
+                # =============================================
+                if cust['customer_score'] >= 75:
 
-    # =====================================================
-    # REVENUE METRICS
-    # =====================================================
-    col1, col2 = st.columns(2)
+                    customer_status = "💎 High Value"
 
-    col1.metric(
-        "Predicted Revenue",
-        f"{future_revenue:.0f}"
-    )
+                    recommendation = """
+                    • Send loyalty rewards
+                    • Offer premium products
+                    • Give early access offers
+                    """
 
-    col2.metric(
-        "Growth Forecast",
-        f"{growth:.2f}%"
-    )
+                elif cust['customer_score'] >= 45:
 
-    st.markdown("---")
+                    customer_status = "📈 Moderate"
 
-    # =====================================================
-    # REVENUE STRATEGY AI
-    # =====================================================
-    if growth > 15:
+                    recommendation = """
+                    • Personalized offers
+                    • Product recommendations
+                    • Engagement campaigns
+                    """
 
-        st.success("""
-        🚀 Strong Growth Expected
+                else:
 
-        Strategy:
-        • Increase inventory
-        • Increase marketing budget
-        • Focus on best-selling products
-        """)
+                    customer_status = "⚠️ At Risk"
 
-    elif growth > 0:
+                    recommendation = """
+                    • Reactivation discount
+                    • Retarget campaigns
+                    • Follow-up promotions
+                    """
 
-        st.info("""
-        📈 Stable Revenue Trend
+                # =============================================
+                # METRICS
+                # =============================================
+                c1, c2, c3 = st.columns(3)
 
-        Strategy:
-        • Maintain operations
-        • Improve customer retention
-        """)
+                c1.metric(
+                    "Customer Score",
+                    f"{cust['customer_score']:.1f}"
+                )
 
-    else:
+                c2.metric(
+                    "Total Spending",
+                    f"{cust['spending']:.0f}"
+                )
 
-        st.warning("""
-        📉 Revenue Risk Detected
+                c3.metric(
+                    "Status",
+                    customer_status
+                )
 
-        Strategy:
-        • Reduce weak inventory
-        • Run discount campaigns
-        • Optimize spending
-        """)
+                st.markdown("---")
 
-    # =====================================================
-    # REVENUE GRAPH
-    # =====================================================
-    graph_data = pd.DataFrame({
-        'Type': [
-            'Current Revenue',
-            'Future Revenue'
-        ],
-        'Revenue': [
-            current_avg,
-            future_revenue
-        ]
-    })
+                # =============================================
+                # AI STRATEGY
+                # =============================================
+                st.success(f"""
+                👤 Customer:
+                {customer_id}
 
-    fig2 = px.bar(
-        graph_data,
-        x='Type',
-        y='Revenue',
-        title="Revenue Forecast"
-    )
-
-    st.plotly_chart(
-        fig2,
-        use_container_width=True,
-        key="revenue_strategy_graph"
-    )
+                Recommended Strategy:
+                {recommendation}
+                """)
 
     st.markdown("---")
 
@@ -474,9 +467,6 @@ def show_strategy(df):
     st.success(f"""
     🔥 Focus Product:
     {top_product['product_name']}
-
-    📈 Revenue Growth Forecast:
-    {growth:.2f}%
 
     🎯 Recommended Actions:
     • Increase focus on top products

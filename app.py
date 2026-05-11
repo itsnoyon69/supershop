@@ -10,7 +10,7 @@ from modules.forecast import show_forecast
 from modules.strategy import show_strategy
 from modules.inventory import show_inventory
 from modules.delivery import show_delivery_ai
-
+from modules.prediction import show_prediction
 st.set_page_config(page_title="Supershop Overview", layout="wide")
 
 st.title("🛒 Supershop Dashboard")
@@ -19,8 +19,8 @@ df = load_data()
 
 admin_panel(df)
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
-    "Overview", "Products", "Customers", "Inventory", "Combo & Discount", "Forecast", "Strategy", "Delivery"
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+    "Overview", "Products", "Customers", "Inventory", "Combo & Discount", "Forecast", "Strategy", "Delivery", "Prediction"
 ])
 
 with tab1:
@@ -46,3 +46,5 @@ with tab7:
 
 with tab8:
     show_delivery_ai(df)
+with tab9:
+    show_prediction(df)

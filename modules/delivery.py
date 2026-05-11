@@ -295,26 +295,32 @@ def show_delivery_ai(df):
 
         col1, col2 = st.columns(2)
 
+        # =================================================
+        # LEFT
+        # =================================================
         with col1:
-
-            quantity = st.number_input(
+            quantity_input = st.text_input(
                 "Quantity",
-                min_value=1,
-                max_value=1000,
-                value=2,
-                step=1
+                placeholder="Enter Quantity",
+                key="delivery_quantity_input"
             )
 
             order_day = st.selectbox(
                 "Order Day",
-                days_order
+                ["Select Order Day"] + days_order,
+                index=0,
+                key="delivery_order_day"
             )
 
+        # =================================================
+        # RIGHT
+        # =================================================
         with col2:
-
             selected_state = st.selectbox(
                 "Delivery State",
-                states
+                ["Select State"] + list(states),
+                index=0,
+                key="delivery_state_select"
             )
 
         predict_btn = st.form_submit_button(
@@ -326,47 +332,78 @@ def show_delivery_ai(df):
     # =====================================================
     if predict_btn:
 
-        day_map = {
-            'Monday': 0,
-            'Tuesday': 1,
-            'Wednesday': 2,
-            'Thursday': 3,
-            'Friday': 4,
-            'Saturday': 5,
-            'Sunday': 6
-        }
+        # =============================================
+        # VALIDATION
+        # =============================================
+        if quantity_input == "":
 
-        current_month = pd.Timestamp.now().month
+            st.warning(
+                "Please enter quantity"
+            )
 
-        input_df = pd.DataFrame({
-            'quantity': [quantity],
-            'day': [day_map[order_day]],
-            'month': [current_month],
-            'state_encoded': [
-                state_map[selected_state]
-            ]
-        })
+        elif not quantity_input.isdigit():
 
-        # =================================================
-        # PREDICT
-        # =================================================
-        late_prob = late_model.predict_proba(
-            input_df
-        )[0][1] * 100
+            st.error(
+                "Quantity must be numeric"
+            )
 
-        eta = eta_model.predict(
-            input_df
-        )[0]
+        elif order_day == "Select Order Day":
 
-        eta = max(1, eta)
+            st.warning(
+                "Please select order day"
+            )
 
-        st.session_state.delivery_result = {
-            "eta": eta,
-            "late_prob": late_prob,
-            "state": selected_state,
-            "quantity": quantity,
-            "order_day": order_day
-        }
+        elif selected_state == "Select State":
+
+            st.warning(
+                "Please select delivery state"
+            )
+
+        else:
+
+            quantity = int(quantity_input)
+
+            day_map = {
+                'Monday': 0,
+                'Tuesday': 1,
+                'Wednesday': 2,
+                'Thursday': 3,
+                'Friday': 4,
+                'Saturday': 5,
+                'Sunday': 6
+            }
+
+            current_month = pd.Timestamp.now().month
+
+            input_df = pd.DataFrame({
+                'quantity': [quantity],
+                'day': [day_map[order_day]],
+                'month': [current_month],
+                'state_encoded': [
+                    state_map[selected_state]
+                ]
+            })
+
+            # =================================================
+            # PREDICT
+            # =================================================
+            late_prob = late_model.predict_proba(
+                input_df
+            )[0][1] * 100
+
+            eta = eta_model.predict(
+                input_df
+            )[0]
+
+            eta = max(1, eta)
+
+            st.session_state.delivery_result = {
+                "eta": eta,
+                "late_prob": late_prob,
+                "state": selected_state,
+                "quantity": quantity,
+                "order_day": order_day
+            }
 
     # =====================================================
     # SHOW RESULT
