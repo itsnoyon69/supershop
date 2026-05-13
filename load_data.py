@@ -1,4 +1,3 @@
-```python id="k4m8x2"
 import pandas as pd
 from db import get_conn
 
