@@ -19,4 +19,3 @@ def load_data():
         df['order_date'] = pd.to_datetime(df['order_date'])
 
     return df
-```
