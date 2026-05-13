@@ -2,7 +2,6 @@ import pandas as pd
 from db import get_conn
 
 def load_data():
-
     conn = get_conn()
 
     query = "SELECT * FROM merge"
