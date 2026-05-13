@@ -1,5 +1,5 @@
 import streamlit as st
-from db import load_data
+from load_data import load_data
 from modules.admin import admin_panel
 from modules.kpi import show_kpi
 from modules.overview import show_overview
