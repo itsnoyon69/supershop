@@ -49,7 +49,14 @@ def show_overview(df):
         'product_name'
     )['quantity'].sum()
 
-    top_product = product_perf.idxmax()
+
+    if not product_perf.empty:
+
+        top_product = product_perf.idxmax()
+
+    else:
+
+        top_product = "No Data"
 
     low_product = product_perf.idxmin()
 
