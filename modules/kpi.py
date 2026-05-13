@@ -49,13 +49,16 @@ def show_kpi(df):
         by='order_date'
     )
 
-    first_revenue = revenue_by_date[
-        'total_price'
-    ].iloc[0]
+    if not revenue_by_date.empty:
 
-    last_revenue = revenue_by_date[
-        'total_price'
-    ].iloc[-1]
+        first_revenue = revenue_by_date['total_price'].iloc[0]
+
+        last_revenue = revenue_by_date['total_price'].iloc[-1]
+
+    else:
+
+        first_revenue = 0
+        last_revenue = 0
 
     if first_revenue == 0:
 
